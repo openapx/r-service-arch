@@ -206,7 +206,7 @@ echo "   - create arch database"
 # - pre-requisite: generate database account password secret
 mkdir -p /.vault/dblocal/archsvc
 # tr -dc A-Za-z0-9 </dev/urandom | head -c 30 > /.vault/dblocal/archsvc/password
-echo "g07kSCGxDEJc2H976OTF1y9XCijgoR" > /.vault/dblocal/postgres/password
+echo "g07kSCGxDEJc2H976OTF1y9XCijgoR" > /.vault/dblocal/archsvc/password
 
 
 # - create database
