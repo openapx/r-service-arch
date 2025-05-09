@@ -5,7 +5,7 @@
 #
 
 # -- application home
-APP_HOME=/opt/openapx/apps/auditor
+APP_HOME=/opt/openapx/apps/arch
 
 TOKEN_SCOPE=service
 
@@ -27,10 +27,10 @@ ENCODEDTXT=$(cd ${APP_HOME}; Rscript -e "cat( cxapp:::.cxapp_apitokenencode(\"${
 # - generate secret
 JSON="{ \"scope\": \"${TOKEN_SCOPE}\", \"principal\": \"${TOKEN_PRINCIPAL}\", \"value\": \"${ENCODEDTXT}\" }"
 
-mkdir -p /.vault/api/auth/auditor/services
+mkdir -p /.vault/api/auth/arch/services
 
 
-echo "${JSON}" > /.vault/api/auth/auditor/services/${TOKEN_PRINCIPAL}
+echo "${JSON}" > /.vault/api/auth/arch/services/${TOKEN_PRINCIPAL}
 
 
 
