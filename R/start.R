@@ -1,0 +1,133 @@
+#' Start arch service
+#' 
+#' @param port Service port
+#' 
+#' 
+#' @description
+#' A standard configurable start for plumber.
+#' 
+#' The function searches for `plumber.R` in the following directories
+#' \itemize{
+#'   \item current working directory
+#'   \item directory `inst/ws` in the current working directory (development mode)
+#'   \item directory `ws` in the current working directory (installed)
+#'   \item directory `ws` in the first occurrence of `arch.service` in the library tree
+#' }
+#'  ws directory starting with
+#' the current working directory and then package install locations in
+#' \code{.libPaths()}.
+#' 
+#' The following app properties are used for database connections.
+#' \itemize{
+#'   \item `DB.VENDOR` (future) to support vendor specific SQL syntax and optimizations
+#'   \item `DB.DRIVER` Database driver (DBI compatible)
+#'   \item `DB.DATABASE` Database name 
+#'   \item `DB.HOST` Database host (defaults to `localhost`)
+#'   \item `DB.PORT` Database port
+#'   \item `DB.USERNAME` Database username or account
+#'   \item `DB.PASSWORD` Database username or account password
+#'   \item `DB.POOL.MINSIZE` Minimum connections in database pool
+#'   \item `DB.POOL.MAXSIZE` Maximum connections in database pool
+#'   \item `DB.POOL.IDLETIMEOUT` Idle duration in seconds until dropping idle connections
+#'                               beyond the pool's minimum number of connections
+#' }
+#' 
+#' Note that the above configuration uses \link[cxapp]{cxapp_config} and supports
+#' both environmental variables and key vaults.
+#' 
+#' For further details on `DB.POOL.MINSIZE`, `DB.POOL.MAXSIZE` and `DB.POOL.IDLETIMEOUT`, 
+#' see \link[pool]{poolCreate}.
+#' 
+#' 
+#' 
+#' @export 
+
+start <- function( port = 12345 ) {
+  
+  
+  # -- default log attributes
+  log_attr <- arch.service::dev_appnode()
+  
+  
+  # -- load configuration
+  cfg <- cxapp::.cxappconfig()
+
+
+  # -- set up database pool
+
+  db_required_cfg <- c( "db.vendor", "db.driver", "db.host", "db.port", "db.username", "db.password" )  
+  
+  for ( xopt in db_required_cfg )
+    if ( is.na( cfg$option( xopt, unset = NA ) ) ) {
+      cxapp::cxapp_log( paste( "Property", base::toupper(xopt), "required and not defined" ), attr = log_attr )
+      stop(paste( "Property", base::toupper(xopt), "required and not defined" ))
+    }
+
+
+  cxapp::cxapp_log( paste0("Starting API session (listen port ", as.character(port), ")" ), attr = log_attr )
+
+    
+  # - remove existing pool  
+  if ( base::exists( ".arch.dbpool", envir = .GlobalEnv) )
+    rm( list = ".arch.dbpool", envir = .GlobalEnv )
+
+  # - create pool
+  assign( ".arch.dbpool", 
+          pool::dbPool( drv = eval(parse( text = cfg$option( "DB.DRIVER", unset = NA ))),
+                        dbname = cfg$option( "DB.DATABASE", unset = "arch" ),
+                        host = cfg$option( "DB.HOST", unset = "localhost" ),
+                        port = cfg$option( "DB.PORT", unset = NA ),
+                        user = cfg$option( "DB.USERNAME", unset = "arch" ),
+                        password = cfg$option( "DB.PASSWORD", unset = paste( sample( c( base::letters, as.character(0:9) ), 
+                                                                                     40, 
+                                                                                     replace = TRUE ), 
+                                                                             collapse = "") ),
+                        minSize = cfg$option( "DB.POOL.MINSIZE", unset = 1),
+                        maxSize = cfg$option( "DB.POOL.MAXSIZE", unset = 25),
+                        idleTimeout = cfg$option( "DB.POOL.IDLETIMEOUT", unset = 120) ),
+          envir = .GlobalEnv )
+
+  cxapp::cxapp_log( paste( "Database connection pool to host",
+                           cfg$option( "DB.HOST", unset = "localhost"),
+                           paste0( "(port ", cfg$option( "DB.PORT", unset = "NA"), ")"),
+                           "started with",
+                           cfg$option( "DB.POOL.MINSIZE", unset = 1), "minimum and",
+                           cfg$option( "DB.POOL.MAXSIZE", unset = 25), "maximum connections."), attr = log_attr )
+  
+  # - add routine to close connection pool on exit
+
+  on.exit( {
+    
+    if ( base::exists( ".arch.dbpool", envir = .GlobalEnv) ) {
+      pool::poolClose( base::get(".arch.dbpool", envir = .GlobalEnv)  )
+      cxapp::cxapp_log( "Database pool closed" )
+      rm( list = ".arch.dbpool", envir = .GlobalEnv )
+    }
+
+  }, add = TRUE)
+  
+
+  
+  # -- set up search locations for the plumber
+  # note: start looking in ws under working directory and then go looking in .libPaths()
+  xpaths <- c( file.path(getwd(), "plumber.R"),
+               file.path(getwd(), "inst", "ws", "plumber.R"),
+               file.path(getwd(), "ws", "plumber.R"),
+               file.path( .libPaths(), "arch.service", "ws", "plumber.R" ) )
+  
+  # -- firs one will do nicely  
+  xplumb <- utils::head( xpaths[ file.exists(xpaths) ], n = 1 )
+  
+  if ( length( xplumb ) == 0 )
+    stop( "Could not find plumber.R file " )
+  
+  # -- start ... defaults for now
+  api <- plumber::pr( xplumb )
+  
+  plumber::pr_run( api, 
+                   port = Sys.getenv("API_PORT", unset = port ), 
+                   quiet = TRUE )
+  
+
+  
+}
